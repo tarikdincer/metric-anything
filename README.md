@@ -100,11 +100,19 @@ git clone https://github.com/metric-anything/metric-anything.git
 cd metric-anything
 ```
 
-### Prompt-Based Metric Depth Map Model (Coming Soon)
+<details>
+<summary><b>Prompt-Based Metric Depth Map Model</b> (Coming Soon)</summary>
 
-### Prompt-Free Metric Depth Map Model (Coming Soon)
+</details>
 
-### Prompt-Free Metric Point Map Model
+<details>
+<summary><b>Prompt-Free Metric Depth Map Model</b> (Coming Soon)</summary>
+
+</details>
+
+<details open>
+<summary><b>Prompt-Free Metric Point Map Model</b></summary>
+
 ```
 cd models/student_pointmap
 python infer.py \
@@ -140,6 +148,7 @@ The maps are in the same size as the input image.
 """
 
 ```
+</details>
 
 
 
