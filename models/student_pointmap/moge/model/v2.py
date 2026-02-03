@@ -12,6 +12,7 @@ import torch.utils.checkpoint
 import torch.amp
 import torch.version
 import utils3d
+from ..utils.timer import timed_block
 from huggingface_hub import hf_hub_download
 
 from ..utils.geometry_torch import normalized_view_plane_uv, recover_focal_shift, angle_diff_vec3
@@ -146,9 +147,10 @@ class MoGeModel(nn.Module):
         else:
             base_h, base_w = round(base_h), round(base_w)
 
-        # Backbones encoding
-        features, cls_token = self.encoder(image, base_h, base_w, return_class_token=True)
-        features = [features, None, None, None, None]
+        with timed_block("Encoder"):
+            # Backbones encoding
+            features, cls_token = self.encoder(image, base_h, base_w, return_class_token=True)
+            features = [features, None, None, None, None]
 
         # Concat UVs for aspect ratio input
         for level in range(5):
@@ -159,13 +161,16 @@ class MoGeModel(nn.Module):
             else:
                 features[level] = torch.concat([features[level], uv], dim=1)
 
-        # Shared neck
-        features = self.neck(features)
-
-        # Heads decoding
-        points, normal, mask = (getattr(self, head)(features)[-1] if hasattr(self, head) else None for head in ['points_head', 'normal_head', 'mask_head'])
-        metric_scale = self.scale_head(cls_token) if hasattr(self, 'scale_head') else None
+        with timed_block("Neck"):
+            # Shared neck
+            features = self.neck(features)
         
+        with timed_block("Heads Decoding"):
+            # Heads decoding
+            points, normal, mask = (getattr(self, head)(features)[-1] if hasattr(self, head) else None for head in ['points_head', 'normal_head', 'mask_head'])
+            metric_scale = self.scale_head(cls_token) if hasattr(self, 'scale_head') else None
+        
+
         # Resize
         points, normal, mask = (F.interpolate(v, (img_h, img_w), mode='bilinear', align_corners=False, antialias=False) if v is not None else None for v in [points, normal, mask])
         
@@ -237,9 +242,10 @@ class MoGeModel(nn.Module):
             min_tokens, max_tokens = self.num_tokens_range
             num_tokens = int(min_tokens + (resolution_level / 9) * (max_tokens - min_tokens))
 
-        # Forward pass
-        with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=use_fp16 and self.dtype != torch.float16):
-            output = self.forward(image, num_tokens=num_tokens)
+        with timed_block("Forward"):
+            # Forward pass
+            with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=use_fp16 and self.dtype != torch.float16):
+                output = self.forward(image, num_tokens=num_tokens)
         points, normal, mask, metric_scale = (output.get(k, None) for k in ['points', 'normal', 'mask', 'metric_scale'])
 
         # Always process the output in fp32 precision
